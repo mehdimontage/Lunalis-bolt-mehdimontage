@@ -1,94 +1,117 @@
 class MyRPGLifeApp {
   constructor() {
     this.data = this.loadData();
-    this.timer = null;
-    this.timerState = {
+    this.currentSection = 'dashboard';
+    this.timer = {
       isRunning: false,
       isPaused: false,
       duration: 25 * 60, // 25 minutes en secondes
       remaining: 25 * 60,
-      currentProject: null
+      interval: null,
+      startTime: null,
+      pausedTime: 0
     };
-    
+    this.weeklyTimer = {
+      interval: null,
+      nextReviewDate: null
+    };
     this.init();
   }
 
   init() {
     this.setupEventListeners();
     this.updateUI();
-    this.startAutoSave();
+    this.startWeeklyCountdown();
+    this.updateFocusStats();
+  }
+
+  loadData() {
+    const defaultData = {
+      xp: 0,
+      dailyXP: 0,
+      lastXPDate: new Date().toDateString(),
+      rank: 'E',
+      projects: [],
+      achievements: [],
+      focusSessions: [],
+      weeklyReviews: [],
+      lastWeeklyReview: null,
+      nextWeeklyReview: null,
+      settings: {
+        autoBreaks: true,
+        spotifyMode: false
+      },
+      stats: {
+        totalFocusTime: 0,
+        dailyFocusTime: 0,
+        seasonFocusTime: 0,
+        dailySessions: 0,
+        mandatoryBlocks: 0,
+        dailyFocusXP: 0,
+        focusStreak: 0,
+        lastFocusDate: null
+      }
+    };
+
+    const saved = localStorage.getItem('myRPGLifeData');
+    if (saved) {
+      const data = { ...defaultData, ...JSON.parse(saved) };
+      // Réinitialiser les stats quotidiennes si c'est un nouveau jour
+      if (data.lastXPDate !== new Date().toDateString()) {
+        data.dailyXP = 0;
+        data.lastXPDate = new Date().toDateString();
+        data.stats.dailyFocusTime = 0;
+        data.stats.dailySessions = 0;
+        data.stats.mandatoryBlocks = 0;
+        data.stats.dailyFocusXP = 0;
+      }
+      return data;
+    }
+    return defaultData;
+  }
+
+  saveData() {
+    localStorage.setItem('myRPGLifeData', JSON.stringify(this.data));
   }
 
   setupEventListeners() {
     // Navigation
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const section = e.currentTarget.dataset.section;
-        this.showSection(section);
+        if (this.timer.isRunning && e.target.dataset.section !== 'focus') {
+          this.showNotification('Terminez votre session de focus avant de changer de section', 'warning');
+          return;
+        }
+        this.showSection(e.target.dataset.section);
       });
     });
 
-    // Boutons d'action du dashboard
-    const sportBtn = document.getElementById('sportBtn');
-    if (sportBtn) {
-      sportBtn.addEventListener('click', () => this.logSport());
-    }
-
-    const sleepBtn = document.getElementById('sleepBtn');
-    if (sleepBtn) {
-      sleepBtn.addEventListener('click', () => this.showSleepModal());
-    }
-
-    // Bouton focus principal
-    const focusStartBtn = document.getElementById('focusStartBtn');
-    if (focusStartBtn) {
-      focusStartBtn.addEventListener('click', () => this.showSection('focus'));
-    }
-
     // Timer controls
-    const startPauseBtn = document.getElementById('startPauseBtn');
-    if (startPauseBtn) {
-      startPauseBtn.addEventListener('click', () => this.toggleTimer());
-    }
-
-    const resetBtn = document.getElementById('resetBtn');
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => this.resetTimer());
-    }
-
+    document.getElementById('startPauseBtn').addEventListener('click', () => this.toggleTimer());
+    document.getElementById('resetBtn').addEventListener('click', () => this.resetTimer());
+    
     // Duration controls
-    const decreaseBtn = document.getElementById('decreaseDurationBtn');
-    const increaseBtn = document.getElementById('increaseDurationBtn');
-    
-    if (decreaseBtn) {
-      decreaseBtn.addEventListener('click', () => this.adjustDuration(-5));
-    }
-    
-    if (increaseBtn) {
-      increaseBtn.addEventListener('click', () => this.adjustDuration(5));
-    }
+    document.getElementById('decreaseDurationBtn').addEventListener('click', () => this.adjustDuration(-5));
+    document.getElementById('increaseDurationBtn').addEventListener('click', () => this.adjustDuration(5));
 
-    // Project management
-    const createProjectBtn = document.getElementById('createProjectBtn');
-    if (createProjectBtn) {
-      createProjectBtn.addEventListener('click', () => this.showProjectForm());
-    }
+    // Focus start button
+    document.getElementById('focusStartBtn').addEventListener('click', () => {
+      this.showSection('focus');
+    });
 
-    // Weekly review
-    const weeklyReviewBtn = document.getElementById('weeklyReviewBtn');
-    if (weeklyReviewBtn) {
-      weeklyReviewBtn.addEventListener('click', () => this.goToWeeklyReview());
-    }
+    // Project creation
+    document.getElementById('createProjectBtn').addEventListener('click', () => {
+      if (!this.timer.isRunning) {
+        this.showProjectForm();
+      }
+    });
 
-    // Modal overlay
-    const modalOverlay = document.getElementById('modalOverlay');
-    if (modalOverlay) {
-      modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) {
-          this.closeModal();
-        }
-      });
-    }
+    // Modal close
+    document.getElementById('modalOverlay').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('modalOverlay')) {
+        this.closeModal();
+      }
+    });
   }
 
   showSection(sectionName) {
@@ -103,18 +126,12 @@ class MyRPGLifeApp {
     });
 
     // Afficher la section demandée
-    const targetSection = document.getElementById(sectionName);
-    if (targetSection) {
-      targetSection.classList.add('active');
-    }
+    document.getElementById(sectionName).classList.add('active');
+    document.querySelector(`[data-section="${sectionName}"]`).classList.add('active');
 
-    // Activer le bouton de navigation correspondant
-    const targetBtn = document.querySelector(`[data-section="${sectionName}"]`);
-    if (targetBtn) {
-      targetBtn.classList.add('active');
-    }
+    this.currentSection = sectionName;
 
-    // Actions spécifiques selon la section
+    // Charger le contenu spécifique à la section
     switch (sectionName) {
       case 'projects':
         this.renderProjects();
@@ -134,1508 +151,757 @@ class MyRPGLifeApp {
     }
   }
 
-  // Actions du dashboard
-  logSport() {
-    const today = new Date().toDateString();
-    if (!this.data.dailyActions[today]) {
-      this.data.dailyActions[today] = {};
-    }
-    
-    if (!this.data.dailyActions[today].sport) {
-      this.data.dailyActions[today].sport = true;
-      this.addXP(3, 'Sport (50min)');
-      this.showNotification('💪 +3 XP pour le sport !', 'success');
-      this.updateUI();
-    } else {
-      this.showNotification('Sport déjà enregistré aujourd\'hui', 'info');
-    }
-  }
-
-  showSleepModal() {
-    const modalContent = `
-      <div class="modal-header">
-        <h3>😴 Enregistrer le Sommeil</h3>
-        <button class="modal-close" onclick="app.closeModal()">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="sleep-options">
-          <button class="sleep-btn good" onclick="app.logSleep('good')">
-            <span class="sleep-icon">🌙</span>
-            <div class="sleep-info">
-              <strong>Bon sommeil</strong>
-              <small>>7h avant 22h</small>
-            </div>
-            <span class="sleep-xp">+2 XP</span>
-          </button>
-          
-          <button class="sleep-btn average" onclick="app.logSleep('average')">
-            <span class="sleep-icon">😴</span>
-            <div class="sleep-info">
-              <strong>Sommeil correct</strong>
-              <small>>7h avant minuit</small>
-            </div>
-            <span class="sleep-xp">+1 XP</span>
-          </button>
-          
-          <button class="sleep-btn bad" onclick="app.logSleep('bad')">
-            <span class="sleep-icon">😵</span>
-            <div class="sleep-info">
-              <strong>Mauvais sommeil</strong>
-              <small><7h ou après minuit</small>
-            </div>
-            <span class="sleep-xp">0 XP</span>
-          </button>
-        </div>
-      </div>
-    `;
-    
-    this.showModal(modalContent);
-  }
-
-  logSleep(quality) {
-    const today = new Date().toDateString();
-    if (!this.data.dailyActions[today]) {
-      this.data.dailyActions[today] = {};
-    }
-    
-    if (!this.data.dailyActions[today].sleep) {
-      this.data.dailyActions[today].sleep = quality;
-      
-      let xp = 0;
-      let message = '';
-      
-      switch (quality) {
-        case 'good':
-          xp = 2;
-          message = '🌙 +2 XP pour un excellent sommeil !';
-          break;
-        case 'average':
-          xp = 1;
-          message = '😴 +1 XP pour un sommeil correct';
-          break;
-        case 'bad':
-          xp = 0;
-          message = '😵 Aucun XP - Essayez de mieux dormir demain';
-          break;
-      }
-      
-      if (xp > 0) {
-        this.addXP(xp, `Sommeil ${quality}`);
-      }
-      
-      this.showNotification(message, xp > 0 ? 'success' : 'warning');
-      this.closeModal();
-      this.updateUI();
-    } else {
-      this.showNotification('Sommeil déjà enregistré aujourd\'hui', 'info');
-      this.closeModal();
-    }
-  }
-
-  showDistractionModal() {
-    const modalContent = `
-      <div class="modal-header">
-        <h3>📱 Déclarer des Distractions</h3>
-        <button class="modal-close" onclick="app.closeModal()">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="distraction-options">
-          <button class="distraction-btn instagram" onclick="app.logDistraction('instagram')">
-            <span class="distraction-icon">📸</span>
-            <div class="distraction-info">
-              <strong>Instagram +1h</strong>
-              <small>Perte de temps sur les réseaux</small>
-            </div>
-            <span class="distraction-penalty">-3 XP</span>
-          </button>
-          
-          <button class="distraction-btn music" onclick="app.logDistraction('music')">
-            <span class="distraction-icon">🎵</span>
-            <div class="distraction-info">
-              <strong>Musique +1h30</strong>
-              <small>Écoute excessive de musique</small>
-            </div>
-            <span class="distraction-penalty">-5 XP</span>
-          </button>
-        </div>
-      </div>
-    `;
-    
-    this.showModal(modalContent);
-  }
-
-  logDistraction(type) {
-    const today = new Date().toDateString();
-    if (!this.data.dailyActions[today]) {
-      this.data.dailyActions[today] = {};
-    }
-    
-    if (!this.data.dailyActions[today].distractions) {
-      this.data.dailyActions[today].distractions = [];
-    }
-    
-    let penalty = 0;
-    let message = '';
-    
-    switch (type) {
-      case 'instagram':
-        penalty = 3;
-        message = '📸 -3 XP pour Instagram';
-        break;
-      case 'music':
-        penalty = 5;
-        message = '🎵 -5 XP pour musique excessive';
-        break;
-    }
-    
-    this.data.dailyActions[today].distractions.push(type);
-    this.addXP(-penalty, `Distraction ${type}`);
-    this.showNotification(message, 'error');
-    this.closeModal();
-    this.updateUI();
-  }
-
-  // Timer functions
   toggleTimer() {
-    if (!this.timerState.isRunning) {
+    if (!this.timer.isRunning && !this.timer.isPaused) {
       this.startTimer();
-    } else {
+    } else if (this.timer.isRunning) {
       this.pauseTimer();
+    } else if (this.timer.isPaused) {
+      this.resumeTimer();
     }
   }
 
   startTimer() {
-    this.timerState.isRunning = true;
-    this.timerState.isPaused = false;
-    
-    const startPauseBtn = document.getElementById('startPauseBtn');
-    const startPauseText = document.getElementById('startPauseText');
-    
-    if (startPauseBtn && startPauseText) {
-      startPauseBtn.classList.add('running');
-      startPauseText.textContent = 'Pause';
+    const projectSelect = document.getElementById('projectSelect');
+    if (!projectSelect.value) {
+      this.showNotification('Veuillez sélectionner un projet avant de commencer', 'warning');
+      return;
     }
-    
-    this.timer = setInterval(() => {
-      this.timerState.remaining--;
+
+    this.timer.isRunning = true;
+    this.timer.isPaused = false;
+    this.timer.startTime = Date.now();
+    this.timer.remaining = this.timer.duration;
+
+    // Désactiver l'interface
+    this.setAppDisabled(true);
+
+    this.timer.interval = setInterval(() => {
+      this.timer.remaining--;
       this.updateTimerDisplay();
-      
-      if (this.timerState.remaining <= 0) {
+
+      if (this.timer.remaining <= 0) {
         this.completeTimer();
       }
     }, 1000);
+
+    this.updateTimerControls();
+    this.showNotification('Session de focus démarrée !', 'success');
   }
 
   pauseTimer() {
-    this.timerState.isRunning = false;
-    this.timerState.isPaused = true;
-    
-    const startPauseBtn = document.getElementById('startPauseBtn');
-    const startPauseText = document.getElementById('startPauseText');
-    
-    if (startPauseBtn && startPauseText) {
-      startPauseBtn.classList.remove('running');
-      startPauseText.textContent = 'Reprendre';
-    }
-    
-    clearInterval(this.timer);
+    this.timer.isRunning = false;
+    this.timer.isPaused = true;
+    this.timer.pausedTime = Date.now();
+    clearInterval(this.timer.interval);
+    this.updateTimerControls();
+  }
+
+  resumeTimer() {
+    this.timer.isRunning = true;
+    this.timer.isPaused = false;
+    this.timer.interval = setInterval(() => {
+      this.timer.remaining--;
+      this.updateTimerDisplay();
+
+      if (this.timer.remaining <= 0) {
+        this.completeTimer();
+      }
+    }, 1000);
+    this.updateTimerControls();
   }
 
   resetTimer() {
-    this.timerState.isRunning = false;
-    this.timerState.isPaused = false;
-    this.timerState.remaining = this.timerState.duration;
-    
-    const startPauseBtn = document.getElementById('startPauseBtn');
-    const startPauseText = document.getElementById('startPauseText');
-    
-    if (startPauseBtn && startPauseText) {
-      startPauseBtn.classList.remove('running');
-      startPauseText.textContent = 'Commencer Focus';
-    }
-    
-    clearInterval(this.timer);
+    clearInterval(this.timer.interval);
+    this.timer.isRunning = false;
+    this.timer.isPaused = false;
+    this.timer.remaining = this.timer.duration;
+    this.timer.startTime = null;
+    this.timer.pausedTime = 0;
+
+    // Réactiver l'interface
+    this.setAppDisabled(false);
+
     this.updateTimerDisplay();
+    this.updateTimerControls();
   }
 
   completeTimer() {
-    clearInterval(this.timer);
+    const focusMinutes = Math.round(this.timer.duration / 60);
+    const projectId = document.getElementById('projectSelect').value;
     
-    const minutes = this.timerState.duration / 60;
-    const xpGained = this.calculateFocusXP(minutes);
+    // Calculer l'XP
+    const xpGained = this.calculateFocusXP(focusMinutes);
     
-    this.addXP(xpGained, `Session Focus ${minutes}min`);
-    this.recordFocusSession(minutes);
+    // Enregistrer la session
+    this.recordFocusSession(focusMinutes, projectId, xpGained);
     
-    this.showNotification(`🎯 Session terminée ! +${xpGained} XP`, 'success');
+    // Ajouter l'XP
+    this.addXP(xpGained);
+    
+    // Réinitialiser le timer
     this.resetTimer();
+    
+    this.showNotification(`Session terminée ! +${xpGained} XP`, 'success');
+    this.updateFocusStats();
+  }
+
+  calculateFocusXP(minutes) {
+    const baseXP = Math.round(minutes / 18);
+    const isBonus = this.data.stats.mandatoryBlocks >= 2;
+    return baseXP * (isBonus ? 2 : 1);
+  }
+
+  recordFocusSession(minutes, projectId, xpGained) {
+    const session = {
+      date: new Date().toISOString(),
+      minutes: minutes,
+      projectId: projectId,
+      xpGained: xpGained
+    };
+
+    this.data.focusSessions.push(session);
+    
+    // Mettre à jour les statistiques
+    this.data.stats.dailyFocusTime += minutes;
+    this.data.stats.totalFocusTime += minutes;
+    this.data.stats.seasonFocusTime += minutes / 60;
+    this.data.stats.dailySessions++;
+    this.data.stats.dailyFocusXP += xpGained;
+    
+    // Vérifier les blocs obligatoires (90 minutes = 1 bloc)
+    if (minutes >= 90) {
+      this.data.stats.mandatoryBlocks = Math.min(2, this.data.stats.mandatoryBlocks + 1);
+    }
+
+    this.saveData();
+  }
+
+  updateFocusStats() {
+    document.getElementById('dailySessions').textContent = this.data.stats.dailySessions;
+    document.getElementById('dailyFocusTime').textContent = `${this.data.stats.dailyFocusTime}min`;
+    document.getElementById('seasonFocusTime').textContent = `${Math.round(this.data.stats.seasonFocusTime)}h`;
+    document.getElementById('mandatoryBlocks').textContent = `${this.data.stats.mandatoryBlocks}/2`;
+    document.getElementById('dailyFocusXP').textContent = this.data.stats.dailyFocusXP;
+    document.getElementById('focusStreak').textContent = this.data.stats.focusStreak;
+
+    // Mettre à jour les blocs visuels
+    this.updateBlocksStatus();
+  }
+
+  updateBlocksStatus() {
+    const block1 = document.getElementById('block1');
+    const block2 = document.getElementById('block2');
+    const block3 = document.getElementById('block3');
+
+    // Bloc 1
+    if (this.data.stats.mandatoryBlocks >= 1) {
+      block1.classList.add('completed');
+    } else {
+      block1.classList.remove('completed');
+    }
+
+    // Bloc 2
+    if (this.data.stats.mandatoryBlocks >= 2) {
+      block2.classList.add('completed');
+      block3.classList.remove('locked');
+    } else {
+      block2.classList.remove('completed');
+      block3.classList.add('locked');
+    }
+  }
+
+  setAppDisabled(disabled) {
+    const appContainer = document.querySelector('.app-container');
+    const autoBreaks = document.getElementById('autoBreaks');
+    const spotifyMode = document.getElementById('spotifyMode');
+    const createProjectBtn = document.getElementById('createProjectBtn');
+
+    if (disabled) {
+      appContainer.classList.add('app-disabled');
+      autoBreaks.disabled = true;
+      spotifyMode.disabled = true;
+      createProjectBtn.disabled = true;
+    } else {
+      appContainer.classList.remove('app-disabled');
+      autoBreaks.disabled = false;
+      spotifyMode.disabled = false;
+      createProjectBtn.disabled = false;
+    }
   }
 
   adjustDuration(minutes) {
-    if (!this.timerState.isRunning) {
-      const newDuration = Math.max(15, Math.min(120, (this.timerState.duration / 60) + minutes)) * 60;
-      this.timerState.duration = newDuration;
-      this.timerState.remaining = newDuration;
-      
-      const durationDisplay = document.getElementById('durationDisplay');
-      if (durationDisplay) {
-        durationDisplay.textContent = `${newDuration / 60} min`;
-      }
-      
-      this.updateTimerDisplay();
-    }
+    if (this.timer.isRunning || this.timer.isPaused) return;
+
+    const newDuration = Math.max(15, Math.min(120, (this.timer.duration / 60) + minutes)) * 60;
+    this.timer.duration = newDuration;
+    this.timer.remaining = newDuration;
+    this.updateTimerDisplay();
+    this.updateDurationDisplay();
   }
 
   updateTimerDisplay() {
-    const minutes = Math.floor(this.timerState.remaining / 60);
-    const seconds = this.timerState.remaining % 60;
+    const minutes = Math.floor(this.timer.remaining / 60);
+    const seconds = this.timer.remaining % 60;
+    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     
-    const timerTime = document.getElementById('timerTime');
-    if (timerTime) {
-      timerTime.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    }
+    document.getElementById('timerTime').textContent = timeString;
     
-    const timerXPPreview = document.getElementById('timerXPPreview');
-    if (timerXPPreview) {
-      const totalMinutes = this.timerState.duration / 60;
-      const xp = this.calculateFocusXP(totalMinutes);
-      timerXPPreview.textContent = `+${xp} XP`;
-    }
-    
-    // Update progress circle
-    const progress = ((this.timerState.duration - this.timerState.remaining) / this.timerState.duration) * 100;
-    const timerProgress = document.getElementById('timerProgress');
-    if (timerProgress) {
-      const circumference = 2 * Math.PI * 90;
-      const offset = circumference - (progress / 100) * circumference;
-      timerProgress.style.strokeDasharray = circumference;
-      timerProgress.style.strokeDashoffset = offset;
-    }
+    // Mettre à jour l'aperçu XP
+    const currentMinutes = Math.round((this.timer.duration - this.timer.remaining) / 60);
+    const xpPreview = this.calculateFocusXP(Math.max(1, currentMinutes));
+    document.getElementById('timerXPPreview').textContent = `+${xpPreview} XP`;
+
+    // Mettre à jour le cercle de progression
+    const progress = ((this.timer.duration - this.timer.remaining) / this.timer.duration) * 100;
+    const circle = document.getElementById('timerProgress');
+    const circumference = 2 * Math.PI * 90;
+    const offset = circumference - (progress / 100) * circumference;
+    circle.style.strokeDasharray = circumference;
+    circle.style.strokeDashoffset = offset;
   }
 
-  // Utility functions
-  calculateFocusXP(minutes) {
-    const baseXP = Math.floor(minutes / 18);
-    const mandatorySessions = this.getMandatorySessionsToday();
-    return mandatorySessions >= 2 ? baseXP * 2 : baseXP;
+  updateDurationDisplay() {
+    const minutes = this.timer.duration / 60;
+    document.getElementById('durationDisplay').textContent = `${minutes} min`;
   }
 
-  getMandatorySessionsToday() {
-    const today = new Date().toDateString();
-    return this.data.focusSessions.filter(session => 
-      new Date(session.date).toDateString() === today && session.duration >= 90
-    ).length;
-  }
+  updateTimerControls() {
+    const startPauseBtn = document.getElementById('startPauseBtn');
+    const startPauseText = document.getElementById('startPauseText');
 
-  recordFocusSession(minutes) {
-    const projectSelect = document.getElementById('projectSelect');
-    const selectedProject = projectSelect ? projectSelect.value : null;
-    
-    this.data.focusSessions.push({
-      date: new Date().toISOString(),
-      duration: minutes,
-      project: selectedProject || null
-    });
-    
-    // Update project total time
-    if (selectedProject) {
-      const project = this.data.projects.find(p => p.id == selectedProject);
-      if (project) {
-        project.totalTime += minutes;
-      }
+    if (this.timer.isRunning) {
+      startPauseText.textContent = 'Pause';
+      startPauseBtn.classList.add('pause');
+    } else if (this.timer.isPaused) {
+      startPauseText.textContent = 'Reprendre';
+      startPauseBtn.classList.remove('pause');
+    } else {
+      startPauseText.textContent = 'Commencer Focus';
+      startPauseBtn.classList.remove('pause');
     }
   }
 
-  addXP(amount, reason) {
-    this.data.totalXP += amount;
+  addXP(amount) {
+    this.data.xp += amount;
     this.data.dailyXP += amount;
-    
-    // Log XP change
-    this.data.xpHistory.push({
+    this.updateRank();
+    this.updateUI();
+    this.saveData();
+  }
+
+  updateRank() {
+    const ranks = [
+      { name: 'E', title: 'Paumé hésitant', min: 0, max: 199 },
+      { name: 'D', title: 'Le Spectateur de Sa Vie', min: 200, max: 299 },
+      { name: 'C', title: 'Apprenti Motivé', min: 300, max: 399 },
+      { name: 'B', title: 'Aventurier Régulier', min: 400, max: 499 },
+      { name: 'A', title: 'Le Vétéran', min: 500, max: 599 },
+      { name: 'S', title: 'Sentinelle de l\'Ascension', min: 600, max: 699 },
+      { name: 'SS', title: 'Maître du Flow', min: 700, max: 749 },
+      { name: 'SSS', title: 'Élu du Destin', min: 750, max: Infinity }
+    ];
+
+    const currentRank = ranks.find(rank => this.data.xp >= rank.min && this.data.xp <= rank.max);
+    if (currentRank && currentRank.name !== this.data.rank) {
+      this.data.rank = currentRank.name;
+      this.showNotification(`Nouveau rang atteint : ${currentRank.title} !`, 'success');
+    }
+  }
+
+  startWeeklyCountdown() {
+    // Si pas de prochaine review définie, la définir à dans 7 jours
+    if (!this.data.nextWeeklyReview) {
+      const nextReview = new Date();
+      nextReview.setDate(nextReview.getDate() + 7);
+      this.data.nextWeeklyReview = nextReview.toISOString();
+      this.saveData();
+    }
+
+    this.updateWeeklyCountdown();
+    this.weeklyTimer.interval = setInterval(() => {
+      this.updateWeeklyCountdown();
+    }, 1000);
+  }
+
+  updateWeeklyCountdown() {
+    const now = new Date();
+    const nextReview = new Date(this.data.nextWeeklyReview);
+    const diff = nextReview - now;
+
+    if (diff <= 0) {
+      document.getElementById('weeklyCountdown').textContent = 'Bilan disponible !';
+      return;
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    document.getElementById('weeklyCountdown').textContent = `${days}j ${hours}h ${minutes}m`;
+  }
+
+  renderWeeklyReview() {
+    const container = document.getElementById('weeklyContent');
+    const now = new Date();
+    const nextReview = new Date(this.data.nextWeeklyReview);
+    const canReview = now >= nextReview;
+
+    if (canReview) {
+      container.innerHTML = `
+        <div class="weekly-form">
+          <h3>📝 Évaluez votre semaine</h3>
+          <p class="weekly-intro">Répondez honnêtement à ces 5 questions pour calculer votre taux d'intensité.</p>
+          
+          <div class="questions-container">
+            <div class="question-item">
+              <label>1. Ai-je été fidèle à mes engagements quotidiens, même quand c'était dur (bloc de focus) ?</label>
+              <div class="rating-scale">
+                ${this.generateRatingScale('q1')}
+              </div>
+            </div>
+            
+            <div class="question-item">
+              <label>2. Ai-je eu une bonne hygiène de vie, énergique et mentale (sommeil, sport, Looksmaxxing) ?</label>
+              <div class="rating-scale">
+                ${this.generateRatingScale('q2')}
+              </div>
+            </div>
+            
+            <div class="question-item">
+              <label>3. Ai-je géré consciemment mon exposition aux distractions ? (Musique et réseaux)</label>
+              <div class="rating-scale">
+                ${this.generateRatingScale('q3')}
+              </div>
+            </div>
+            
+            <div class="question-item">
+              <label>4. Ai-je avancé concrètement vers mes 3 objectifs principaux de l'été ?</label>
+              <div class="rating-scale">
+                ${this.generateRatingScale('q4')}
+              </div>
+            </div>
+            
+            <div class="question-item">
+              <label>5. Est-ce que je me sens fière de ma semaine et de mon état mental ?</label>
+              <div class="rating-scale">
+                ${this.generateRatingScale('q5')}
+              </div>
+            </div>
+          </div>
+          
+          <button class="submit-review-btn" onclick="app.submitWeeklyReview()">
+            ✨ Valider le Bilan (+5 XP)
+          </button>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="weekly-waiting">
+          <h3>⏳ Prochain bilan dans</h3>
+          <p>Votre prochain bilan hebdomadaire sera disponible dans quelques jours.</p>
+          <div class="last-review-info">
+            ${this.data.weeklyReviews.length > 0 ? `
+              <h4>Dernier bilan :</h4>
+              <p>Score : ${this.data.weeklyReviews[this.data.weeklyReviews.length - 1].totalScore}/50</p>
+              <p>Pourcentage : ${this.data.weeklyReviews[this.data.weeklyReviews.length - 1].percentage}%</p>
+            ` : '<p>Aucun bilan effectué pour le moment.</p>'}
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  generateRatingScale(questionId) {
+    let html = '';
+    for (let i = 1; i <= 10; i++) {
+      html += `
+        <label class="rating-option">
+          <input type="radio" name="${questionId}" value="${i}">
+          <span class="rating-number">${i}</span>
+        </label>
+      `;
+    }
+    return html;
+  }
+
+  submitWeeklyReview() {
+    const questions = ['q1', 'q2', 'q3', 'q4', 'q5'];
+    const scores = {};
+    let totalScore = 0;
+
+    // Récupérer les réponses
+    for (const q of questions) {
+      const selected = document.querySelector(`input[name="${q}"]:checked`);
+      if (!selected) {
+        this.showNotification('Veuillez répondre à toutes les questions', 'warning');
+        return;
+      }
+      scores[q] = parseInt(selected.value);
+      totalScore += scores[q];
+    }
+
+    // Calculer le pourcentage
+    const percentage = Math.round((totalScore / 50) * 100);
+
+    // Enregistrer le bilan
+    const review = {
       date: new Date().toISOString(),
-      amount: amount,
-      reason: reason,
-      total: this.data.totalXP
-    });
-  }
+      scores: scores,
+      totalScore: totalScore,
+      percentage: percentage
+    };
 
-  // Project management
-  showProjectForm() {
-    this.showSection('projects');
-    const projectForm = document.getElementById('projectForm');
-    if (projectForm) {
-      projectForm.style.display = 'block';
-    }
-  }
-
-  saveProject() {
-    const nameInput = document.getElementById('projectName');
-    const descInput = document.getElementById('projectDescription');
-    const timeGoalInput = document.getElementById('projectTimeGoal');
+    this.data.weeklyReviews.push(review);
     
-    if (nameInput && nameInput.value.trim()) {
-      const project = {
-        id: Date.now(),
-        name: nameInput.value.trim(),
-        description: descInput ? descInput.value.trim() : '',
-        timeGoal: timeGoalInput ? parseInt(timeGoalInput.value) || 0 : 0,
-        createdAt: new Date().toISOString(),
-        totalTime: 0
-      };
+    // Programmer le prochain bilan dans 7 jours
+    const nextReview = new Date();
+    nextReview.setDate(nextReview.getDate() + 7);
+    this.data.nextWeeklyReview = nextReview.toISOString();
+
+    // Ajouter 5 XP
+    this.addXP(5);
+
+    // Mettre à jour le taux d'intensité
+    this.updateIntensityRate();
+
+    this.saveData();
+    this.showNotification('Bilan hebdomadaire enregistré ! +5 XP', 'success');
+    
+    // Animation de succès
+    this.playReviewAnimation();
+    
+    // Recharger la vue
+    this.renderWeeklyReview();
+  }
+
+  updateIntensityRate() {
+    if (this.data.weeklyReviews.length === 0) return;
+
+    // Prendre les 4 dernières semaines maximum
+    const recentReviews = this.data.weeklyReviews.slice(-4);
+    const average = recentReviews.reduce((sum, review) => sum + review.percentage, 0) / recentReviews.length;
+    
+    const intensityRate = Math.round(average);
+    
+    // Déterminer le label
+    const intensityLevels = [
+      { min: 0, max: 20, label: 'Errant du Néant' },
+      { min: 21, max: 40, label: 'Apprenti Perdu' },
+      { min: 41, max: 60, label: 'Disciple Motivé' },
+      { min: 61, max: 75, label: 'Adepte Déterminé' },
+      { min: 76, max: 85, label: 'Expert Focalisé' },
+      { min: 86, max: 95, label: 'Maître Discipliné' },
+      { min: 96, max: 99, label: 'Légende Vivante' },
+      { min: 100, max: 100, label: 'Transcendant' }
+    ];
+
+    const level = intensityLevels.find(l => intensityRate >= l.min && intensityRate <= l.max);
+    
+    // Mettre à jour l'affichage
+    document.getElementById('intensityValue').textContent = `${intensityRate}%`;
+    document.getElementById('intensityLabel').textContent = level ? level.label : 'Errant du Néant';
+    
+    // Mettre à jour la barre de progression
+    const intensityFill = document.getElementById('intensityFill');
+    intensityFill.style.width = `${intensityRate}%`;
+  }
+
+  playReviewAnimation() {
+    // Animation simple pour le moment
+    const notification = document.createElement('div');
+    notification.className = 'review-animation';
+    notification.innerHTML = '✨ Bilan complété ! +5 XP ✨';
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.remove();
+    }, 3000);
+  }
+
+  showRanksModal() {
+    const ranks = [
+      { name: 'SSS', title: 'Élu du Destin', min: 750, class: 'rank-sss', badge: '👑' },
+      { name: 'SS', title: 'Maître du Flow', min: 700, class: 'rank-ss', badge: '💎' },
+      { name: 'S', title: 'Sentinelle de l\'Ascension', min: 600, class: 'rank-s', badge: '⭐' },
+      { name: 'A', title: 'Le Vétéran', min: 500, class: 'rank-a', badge: '🔥' },
+      { name: 'B', title: 'Aventurier Régulier', min: 400, class: 'rank-b', badge: '🌟' },
+      { name: 'C', title: 'Apprenti Motivé', min: 300, class: 'rank-c', badge: '⚡' },
+      { name: 'D', title: 'Le Spectateur de Sa Vie', min: 200, class: 'rank-d', badge: '🎯' },
+      { name: 'E', title: 'Paumé hésitant', min: 0, class: 'rank-e', badge: '🌱' }
+    ];
+
+    const ranksHtml = ranks.map(rank => {
+      const isCurrentRank = this.data.rank === rank.name;
+      const nextRankMin = ranks.find(r => r.name === rank.name)?.min || 0;
+      const maxXP = rank.name === 'SSS' ? '∞' : (ranks[ranks.indexOf(rank) - 1]?.min - 1 || 749);
       
-      this.data.projects.push(project);
-      this.showNotification('Projet créé avec succès !', 'success');
-      this.cancelProject();
-      this.renderProjects();
-    }
-  }
+      return `
+        <div class="rank-item ${rank.class} ${isCurrentRank ? 'current' : ''}">
+          <div class="rank-badge">${rank.badge}</div>
+          <div class="rank-title">Rang ${rank.name}</div>
+          <div class="rank-subtitle">${rank.title}</div>
+          <div class="rank-xp">${rank.min} - ${maxXP} XP</div>
+          ${isCurrentRank ? '<div class="current-indicator">RANG ACTUEL</div>' : ''}
+        </div>
+      `;
+    }).join('');
 
-  cancelProject() {
-    const projectForm = document.getElementById('projectForm');
-    if (projectForm) {
-      projectForm.style.display = 'none';
-    }
-    
-    const nameInput = document.getElementById('projectName');
-    const descInput = document.getElementById('projectDescription');
-    const timeGoalInput = document.getElementById('projectTimeGoal');
-    
-    if (nameInput) nameInput.value = '';
-    if (descInput) descInput.value = '';
-    if (timeGoalInput) timeGoalInput.value = '';
+    this.showModal(`
+      <div class="ranks-modal">
+        <h2>🏆 Système de Rangs</h2>
+        <p>Votre rang actuel : <strong>${this.data.rank}</strong> (${this.data.xp} XP)</p>
+        <div class="ranks-grid">
+          ${ranksHtml}
+        </div>
+      </div>
+    `);
   }
 
   renderProjects() {
-    const projectsGrid = document.getElementById('projectsGrid');
-    if (!projectsGrid) return;
-    
+    const container = document.getElementById('projectsGrid');
     if (this.data.projects.length === 0) {
-      projectsGrid.innerHTML = `
+      container.innerHTML = `
         <div class="no-projects">
-          <div class="no-projects-icon">📋</div>
-          <p>Aucun projet créé pour le moment.</p>
-          <p>Créez votre premier projet pour commencer à tracker votre temps !</p>
+          <h3>Aucun projet créé</h3>
+          <p>Créez votre premier projet pour commencer à tracker votre progression !</p>
         </div>
       `;
       return;
     }
-    
-    projectsGrid.innerHTML = this.data.projects.map(project => `
+
+    container.innerHTML = this.data.projects.map(project => `
       <div class="project-card">
-        <div class="project-header">
-          <h3>${project.name}</h3>
-          <div class="project-progress-ring">
-            <svg class="progress-ring" width="60" height="60">
-              <circle cx="30" cy="30" r="25" class="progress-ring-bg"></circle>
-              <circle cx="30" cy="30" r="25" class="progress-ring-fill" 
-                style="stroke-dasharray: ${2 * Math.PI * 25}; 
-                       stroke-dashoffset: ${2 * Math.PI * 25 * (1 - Math.min(project.totalTime / 60 / (project.timeGoal || 1), 1))}"></circle>
-            </svg>
-            <div class="progress-percentage">
-              ${project.timeGoal > 0 ? Math.round((project.totalTime / 60) / project.timeGoal * 100) : 0}%
-            </div>
+        <h3>${project.name}</h3>
+        <p>${project.description || 'Aucune description'}</p>
+        <div class="project-stats">
+          <div class="stat">
+            <span class="stat-label">Temps passé</span>
+            <span class="stat-value">${project.timeSpent || 0}h</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Objectif</span>
+            <span class="stat-value">${project.timeGoal || 0}h</span>
           </div>
         </div>
-        
-        <p class="project-description">${project.description || 'Aucune description'}</p>
-        
-        <div class="project-stats">
-          <div class="stat-item">
-            <span class="stat-icon">⏱️</span>
-            <div class="stat-content">
-              <div class="stat-value">${Math.floor(project.totalTime / 60)}h ${project.totalTime % 60}min</div>
-              <div class="stat-label">Temps total</div>
-            </div>
+        <div class="project-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${Math.min(100, ((project.timeSpent || 0) / (project.timeGoal || 1)) * 100)}%"></div>
           </div>
-          
-          ${project.timeGoal > 0 ? `
-            <div class="stat-item">
-              <span class="stat-icon">🎯</span>
-              <div class="stat-content">
-                <div class="stat-value">${project.timeGoal}h</div>
-                <div class="stat-label">Objectif</div>
-              </div>
-            </div>
-            
-            <div class="stat-item">
-              <span class="stat-icon">📈</span>
-              <div class="stat-content">
-                <div class="stat-value">${Math.max(0, project.timeGoal - Math.floor(project.totalTime / 60))}h</div>
-                <div class="stat-label">Restant</div>
-              </div>
-            </div>
-          ` : ''}
         </div>
       </div>
     `).join('');
-    
-    // Update project selector in focus timer
+
+    // Mettre à jour le sélecteur de projets
     this.updateProjectSelector();
   }
-  
+
   updateProjectSelector() {
-    const projectSelect = document.getElementById('projectSelect');
-    if (!projectSelect) return;
+    const select = document.getElementById('projectSelect');
+    select.innerHTML = '<option value="">Sélectionner un projet</option>';
     
-    projectSelect.innerHTML = '<option value="">Sélectionner un projet</option>' +
-      this.data.projects.map(project => 
-        `<option value="${project.id}">${project.name}</option>`
-      ).join('');
+    this.data.projects.forEach(project => {
+      const option = document.createElement('option');
+      option.value = project.id;
+      option.textContent = project.name;
+      select.appendChild(option);
+    });
   }
 
-  // Modal functions
-  showModal(content) {
-    const modal = document.getElementById('modal');
-    const modalOverlay = document.getElementById('modalOverlay');
-    
-    if (modal && modalOverlay) {
-      modal.innerHTML = content;
-      modalOverlay.style.display = 'flex';
+  showProjectForm() {
+    document.getElementById('projectForm').style.display = 'block';
+  }
+
+  cancelProject() {
+    document.getElementById('projectForm').style.display = 'none';
+    document.getElementById('projectName').value = '';
+    document.getElementById('projectDescription').value = '';
+    document.getElementById('projectTimeGoal').value = '';
+  }
+
+  saveProject() {
+    const name = document.getElementById('projectName').value.trim();
+    const description = document.getElementById('projectDescription').value.trim();
+    const timeGoal = parseInt(document.getElementById('projectTimeGoal').value) || 0;
+
+    if (!name) {
+      this.showNotification('Le nom du projet est requis', 'warning');
+      return;
     }
-  }
 
-  closeModal() {
-    const modalOverlay = document.getElementById('modalOverlay');
-    if (modalOverlay) {
-      modalOverlay.style.display = 'none';
-    }
-  }
+    const project = {
+      id: Date.now().toString(),
+      name: name,
+      description: description,
+      timeGoal: timeGoal,
+      timeSpent: 0,
+      createdAt: new Date().toISOString()
+    };
 
-  // Notification system
-  showNotification(message, type = 'info') {
-    const container = document.getElementById('notifications');
-    if (!container) return;
-    
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    
-    container.appendChild(notification);
-    
-    setTimeout(() => {
-      notification.classList.add('show');
-    }, 100);
-    
-    setTimeout(() => {
-      notification.classList.remove('show');
-      setTimeout(() => {
-        container.removeChild(notification);
-      }, 300);
-    }, 3000);
-  }
-
-  // Weekly review
-  goToWeeklyReview() {
-    this.showSection('weekly');
-  }
-
-  renderWeeklyReview() {
-    const weeklyContent = document.getElementById('weeklyContent');
-    if (!weeklyContent) return;
-
-    const currentWeek = this.getCurrentWeekNumber();
-    const lastReview = this.getLastWeeklyReview();
-    const canDoReview = this.canDoWeeklyReview();
-
-    weeklyContent.innerHTML = `
-      <div class="weekly-status">
-        <div class="week-info">
-          <h3>Semaine ${currentWeek} - Saison ${this.data.currentSeason || 1}</h3>
-          <p class="week-dates">${this.getWeekDates()}</p>
-        </div>
-        
-        ${canDoReview ? `
-          <div class="weekly-form-container">
-            <h4>📝 Évaluez votre semaine (sur 10)</h4>
-            <div class="weekly-questions">
-              <div class="question-item">
-                <label>🎯 Productivité et focus</label>
-                <div class="rating-slider">
-                  <input type="range" id="productivity" min="1" max="10" value="5" class="slider">
-                  <span class="rating-value">5/10</span>
-                </div>
-              </div>
-              
-              <div class="question-item">
-                <label>💪 Santé et bien-être</label>
-                <div class="rating-slider">
-                  <input type="range" id="health" min="1" max="10" value="5" class="slider">
-                  <span class="rating-value">5/10</span>
-                </div>
-              </div>
-              
-              <div class="question-item">
-                <label>🎨 Créativité et apprentissage</label>
-                <div class="rating-slider">
-                  <input type="range" id="creativity" min="1" max="10" value="5" class="slider">
-                  <span class="rating-value">5/10</span>
-                </div>
-              </div>
-              
-              <div class="question-item">
-                <label>🤝 Relations sociales</label>
-                <div class="rating-slider">
-                  <input type="range" id="social" min="1" max="10" value="5" class="slider">
-                  <span class="rating-value">5/10</span>
-                </div>
-              </div>
-              
-              <div class="question-item">
-                <label>😊 Satisfaction générale</label>
-                <div class="rating-slider">
-                  <input type="range" id="satisfaction" min="1" max="10" value="5" class="slider">
-                  <span class="rating-value">5/10</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="weekly-summary">
-              <h5>💭 Réflexion de la semaine</h5>
-              <textarea id="weeklyReflection" placeholder="Qu'avez-vous appris cette semaine ? Quels sont vos objectifs pour la semaine prochaine ?"></textarea>
-            </div>
-            
-            <button class="submit-review-btn" onclick="app.submitWeeklyReview()">
-              ✨ Valider le Bilan (+5 XP)
-            </button>
-          </div>
-        ` : `
-          <div class="review-completed">
-            <div class="completed-icon">✅</div>
-            <h4>Bilan de la semaine terminé !</h4>
-            <p>Prochain bilan disponible dans ${this.getTimeUntilNextReview()}</p>
-          </div>
-        `}
-      </div>
-      
-      <div class="weekly-history">
-        <h4>📈 Historique des Bilans</h4>
-        <div class="reviews-grid">
-          ${this.renderWeeklyHistory()}
-        </div>
-      </div>
-    `;
-
-    // Setup sliders
-    this.setupWeeklySliders();
+    this.data.projects.push(project);
+    this.saveData();
+    this.cancelProject();
+    this.renderProjects();
+    this.showNotification('Projet créé avec succès !', 'success');
   }
 
   renderAchievements() {
-    const achievementsContent = document.getElementById('achievementsContent');
-    if (!achievementsContent) return;
-
-    const achievements = this.getAchievements();
-    const unlockedCount = achievements.filter(a => a.unlocked).length;
-
-    achievementsContent.innerHTML = `
-      <div class="achievements-header">
-        <div class="achievements-stats">
-          <div class="achievement-counter">
-            <span class="counter-number">${unlockedCount}</span>
-            <span class="counter-total">/ ${achievements.length}</span>
-            <span class="counter-label">Succès débloqués</span>
-          </div>
-          <div class="achievement-progress">
-            <div class="progress-bar">
-              <div class="progress-fill" style="width: ${(unlockedCount / achievements.length) * 100}%"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="achievements-grid">
-        ${achievements.map(achievement => `
-          <div class="achievement-card ${achievement.unlocked ? 'unlocked' : 'locked'}">
-            <div class="achievement-icon">${achievement.icon}</div>
-            <div class="achievement-info">
-              <h4>${achievement.name}</h4>
-              <p>${achievement.description}</p>
-              <div class="achievement-reward">+${achievement.xp} XP</div>
-              ${achievement.unlocked ? 
-                `<div class="achievement-date">Débloqué le ${new Date(achievement.unlockedAt).toLocaleDateString()}</div>` :
-                `<div class="achievement-progress-text">${achievement.progress || '0'}/${achievement.target || '?'}</div>`
-              }
-            </div>
-            ${achievement.unlocked ? '<div class="achievement-badge">✓</div>' : ''}
-          </div>
-        `).join('')}
+    // Placeholder pour les achievements
+    document.getElementById('achievementsContent').innerHTML = `
+      <div class="achievements-placeholder">
+        <h3>🏆 Système d'Achievements</h3>
+        <p>Les achievements seront bientôt disponibles !</p>
       </div>
     `;
   }
 
   renderProgression() {
-    const progressionContent = document.getElementById('progressionContent');
-    if (!progressionContent) return;
-
-    const stats = this.getProgressionStats();
-
-    progressionContent.innerHTML = `
-      <div class="progression-overview">
-        <div class="stats-cards">
-          <div class="stat-card-large primary">
-            <div class="stat-icon">⚡</div>
-            <div class="stat-content">
-              <div class="stat-number">${this.data.totalXP}</div>
-              <div class="stat-label">XP Total</div>
-            </div>
-          </div>
-          
-          <div class="stat-card-large secondary">
-            <div class="stat-icon">🎯</div>
-            <div class="stat-content">
-              <div class="stat-number">${stats.totalFocusTime}h</div>
-              <div class="stat-label">Temps Focus</div>
-            </div>
-          </div>
-          
-          <div class="stat-card-large accent">
-            <div class="stat-icon">🔥</div>
-            <div class="stat-content">
-              <div class="stat-number">${stats.currentStreak}</div>
-              <div class="stat-label">Streak Actuel</div>
-            </div>
-          </div>
-          
-          <div class="stat-card-large success">
-            <div class="stat-icon">📊</div>
-            <div class="stat-content">
-              <div class="stat-number">${stats.intensityRate}%</div>
-              <div class="stat-label">Taux d'Intensité</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="progression-charts">
-        <div class="chart-container">
-          <h4>📈 Évolution XP (7 derniers jours)</h4>
-          <div class="xp-chart">
-            ${this.renderXPChart()}
-          </div>
-        </div>
-        
-        <div class="chart-container">
-          <h4>🎯 Sessions Focus par Jour</h4>
-          <div class="focus-chart">
-            ${this.renderFocusChart()}
-          </div>
-        </div>
-      </div>
-      
-      <div class="progression-details">
-        <div class="detail-section">
-          <h4>🏆 Progression par Rang</h4>
-          <div class="ranks-progression">
-            ${this.renderRanksProgression()}
-          </div>
-        </div>
-        
-        <div class="detail-section">
-          <h4>📋 Temps Focus par Projet</h4>
-          <div class="projects-focus-stats">
-            ${this.renderProjectsFocusStats()}
-          </div>
-        </div>
-      </div>
-      
-      <div class="progression-details">
-        <div class="detail-section full-width">
-          <h4>📋 Projets les Plus Actifs</h4>
-          <div class="projects-stats">
-            ${this.renderProjectsStats()}
-          </div>
-        </div>
+    // Placeholder pour la progression
+    document.getElementById('progressionContent').innerHTML = `
+      <div class="progression-placeholder">
+        <h3>📈 Statistiques Détaillées</h3>
+        <p>Les statistiques détaillées seront bientôt disponibles !</p>
       </div>
     `;
-  }
-
-  renderProjectsFocusStats() {
-    const projectStats = this.getProjectsFocusStats();
-    
-    if (projectStats.length === 0) {
-      return '<p class="no-projects-stats">Aucune session de focus enregistrée</p>';
-    }
-    
-    return projectStats.map(stat => `
-      <div class="project-focus-stat">
-        <div class="project-focus-info">
-          <div class="project-focus-name">${stat.name}</div>
-          <div class="project-focus-sessions">${stat.sessions} session${stat.sessions > 1 ? 's' : ''}</div>
-        </div>
-        <div class="project-focus-time">
-          <div class="focus-time-value">${Math.floor(stat.totalTime / 60)}h ${stat.totalTime % 60}min</div>
-          <div class="focus-time-bar">
-            <div class="focus-time-fill" style="width: ${(stat.totalTime / Math.max(...projectStats.map(s => s.totalTime))) * 100}%"></div>
-          </div>
-        </div>
-      </div>
-    `).join('');
-  }
-  
-  getProjectsFocusStats() {
-    const stats = new Map();
-    
-    // Initialize with "Général" for sessions without project
-    stats.set(null, {
-      name: 'Général',
-      totalTime: 0,
-      sessions: 0
-    });
-    
-    // Initialize with all projects
-    this.data.projects.forEach(project => {
-      stats.set(project.id, {
-        name: project.name,
-        totalTime: 0,
-        sessions: 0
-      });
-    });
-    
-    // Calculate stats from focus sessions
-    this.data.focusSessions.forEach(session => {
-      const projectId = session.project;
-      if (stats.has(projectId)) {
-        stats.get(projectId).totalTime += session.duration;
-        stats.get(projectId).sessions += 1;
-      }
-    });
-    
-    // Convert to array and filter out empty stats
-    return Array.from(stats.values())
-      .filter(stat => stat.sessions > 0)
-      .sort((a, b) => b.totalTime - a.totalTime);
   }
 
   renderSettings() {
-    const settingsContent = document.getElementById('settingsContent');
-    if (!settingsContent) return;
-
-    settingsContent.innerHTML = `
-      <div class="settings-grid">
-        <!-- Paramètres de Focus -->
-        <div class="settings-card focus-settings">
-          <div class="settings-header">
-            <div class="settings-icon">🎯</div>
-            <h3>Paramètres de Focus</h3>
-          </div>
-          
-          <div class="settings-content">
-            <div class="setting-group">
-              <label class="setting-label">
-                <span class="label-icon">⏱️</span>
-                Durée par défaut des sessions
-              </label>
-              <div class="select-wrapper">
-                <select id="defaultFocusDuration" class="modern-select">
-                  <option value="15">15 minutes</option>
-                  <option value="25" selected>25 minutes</option>
-                  <option value="45">45 minutes</option>
-                  <option value="90">90 minutes</option>
-                </select>
-              </div>
-            </div>
-            
-            <div class="setting-group">
-              <div class="toggle-setting">
-                <div class="toggle-info">
-                  <span class="toggle-icon">⏸️</span>
-                  <div class="toggle-text">
-                    <div class="toggle-title">Pauses automatiques</div>
-                    <div class="toggle-subtitle">5 min toutes les 25 min</div>
-                  </div>
-                </div>
-                <label class="modern-toggle">
-                  <input type="checkbox" id="autoBreaksEnabled" checked>
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-            
-            <div class="setting-group">
-              <div class="toggle-setting">
-                <div class="toggle-info">
-                  <span class="toggle-icon">🔊</span>
-                  <div class="toggle-text">
-                    <div class="toggle-title">Notifications sonores</div>
-                    <div class="toggle-subtitle">Sons de fin de session</div>
-                  </div>
-                </div>
-                <label class="modern-toggle">
-                  <input type="checkbox" id="soundNotifications" checked>
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Apparence -->
-        <div class="settings-card appearance-settings">
-          <div class="settings-header">
-            <div class="settings-icon">🎨</div>
-            <h3>Apparence</h3>
-          </div>
-          
-          <div class="settings-content">
-            <div class="setting-group">
-              <label class="setting-label">
-                <span class="label-icon">🌈</span>
-                Thème de couleur
-              </label>
-              <div class="theme-selector">
-                <div class="theme-option" data-theme="default">
-                  <div class="theme-preview lunalis"></div>
-                  <span class="theme-name">Lunalis</span>
-                  <span class="theme-subtitle">Bleu/Violet</span>
-                </div>
-                <div class="theme-option" data-theme="fire">
-                  <div class="theme-preview solaris"></div>
-                  <span class="theme-name">Solaris</span>
-                  <span class="theme-subtitle">Rouge/Orange</span>
-                </div>
-                <div class="theme-option" data-theme="nature">
-                  <div class="theme-preview verdalis"></div>
-                  <span class="theme-name">Verdalis</span>
-                  <span class="theme-subtitle">Vert/Nature</span>
-                </div>
-                <div class="theme-option" data-theme="cosmic">
-                  <div class="theme-preview cosmalis"></div>
-                  <span class="theme-name">Cosmalis</span>
-                  <span class="theme-subtitle">Violet/Rose</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="setting-group">
-              <div class="toggle-setting">
-                <div class="toggle-info">
-                  <span class="toggle-icon">✨</span>
-                  <div class="toggle-text">
-                    <div class="toggle-title">Animations</div>
-                    <div class="toggle-subtitle">Effets visuels et transitions</div>
-                  </div>
-                </div>
-                <label class="modern-toggle">
-                  <input type="checkbox" id="animationsEnabled" checked>
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Gestion des Données -->
-        <div class="settings-card data-settings">
-          <div class="settings-header">
-            <div class="settings-icon">💾</div>
-            <h3>Gestion des Données</h3>
-          </div>
-          
-          <div class="settings-content">
-            <div class="data-actions">
-              <button class="data-btn export-btn" onclick="app.exportData()">
-                <span class="btn-icon">📤</span>
-                <div class="btn-content">
-                  <div class="btn-title">Exporter</div>
-                  <div class="btn-subtitle">Sauvegarder mes données</div>
-                </div>
-              </button>
-              
-              <button class="data-btn import-btn" onclick="app.importData()">
-                <span class="btn-icon">📥</span>
-                <div class="btn-content">
-                  <div class="btn-title">Importer</div>
-                  <div class="btn-subtitle">Restaurer des données</div>
-                </div>
-              </button>
-              
-              <button class="data-btn reset-btn" onclick="app.resetAllData()">
-                <span class="btn-icon">🗑️</span>
-                <div class="btn-content">
-                  <div class="btn-title">Réinitialiser</div>
-                  <div class="btn-subtitle">Effacer toutes les données</div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Informations -->
-        <div class="settings-card info-settings">
-          <div class="settings-header">
-            <div class="settings-icon">ℹ️</div>
-            <h3>Informations</h3>
-          </div>
-          
-          <div class="settings-content">
-            <div class="info-grid">
-              <div class="info-item">
-                <div class="info-icon">🚀</div>
-                <div class="info-content">
-                  <div class="info-value">3.0.0 - Lunalis</div>
-                  <div class="info-label">Version</div>
-                </div>
-              </div>
-              
-              <div class="info-item">
-                <div class="info-icon">💾</div>
-                <div class="info-content">
-                  <div class="info-value">${new Date(this.data.lastSaved || Date.now()).toLocaleDateString()}</div>
-                  <div class="info-label">Dernière sauvegarde</div>
-                </div>
-              </div>
-              
-              <div class="info-item">
-                <div class="info-icon">🎯</div>
-                <div class="info-content">
-                  <div class="info-value">${this.data.focusSessions.length}</div>
-                  <div class="info-label">Sessions totales</div>
-                </div>
-              </div>
-              
-              <div class="info-item">
-                <div class="info-icon">📋</div>
-                <div class="info-content">
-                  <div class="info-value">${this.data.projects.length}</div>
-                  <div class="info-label">Projets créés</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    this.setupSettingsListeners();
-  }
-
-  // Helper methods for new sections
-  getCurrentWeekNumber() {
-    const startDate = new Date(this.data.seasonStartDate || Date.now());
-    const now = new Date();
-    const diffTime = Math.abs(now - startDate);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return Math.ceil(diffDays / 7);
-  }
-
-  getWeekDates() {
-    const now = new Date();
-    const monday = new Date(now.setDate(now.getDate() - now.getDay() + 1));
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    
-    return `${monday.toLocaleDateString()} - ${sunday.toLocaleDateString()}`;
-  }
-
-  canDoWeeklyReview() {
-    const lastReview = this.data.weeklyReviews[this.data.weeklyReviews.length - 1];
-    if (!lastReview) return true;
-    
-    const lastReviewDate = new Date(lastReview.date);
-    const now = new Date();
-    const daysSinceLastReview = (now - lastReviewDate) / (1000 * 60 * 60 * 24);
-    
-    return daysSinceLastReview >= 7;
-  }
-
-  getTimeUntilNextReview() {
-    const lastReview = this.data.weeklyReviews[this.data.weeklyReviews.length - 1];
-    if (!lastReview) return "maintenant";
-    
-    const nextReviewDate = new Date(lastReview.date);
-    nextReviewDate.setDate(nextReviewDate.getDate() + 7);
-    
-    const now = new Date();
-    const diffTime = nextReviewDate - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    return diffDays > 0 ? `${diffDays} jour(s)` : "maintenant";
-  }
-
-  setupWeeklySliders() {
-    const sliders = document.querySelectorAll('.slider');
-    sliders.forEach(slider => {
-      const valueSpan = slider.parentElement.querySelector('.rating-value');
-      
-      slider.addEventListener('input', (e) => {
-        valueSpan.textContent = `${e.target.value}/10`;
-      });
-    });
-  }
-
-  submitWeeklyReview() {
-    const productivity = document.getElementById('productivity').value;
-    const health = document.getElementById('health').value;
-    const creativity = document.getElementById('creativity').value;
-    const social = document.getElementById('social').value;
-    const satisfaction = document.getElementById('satisfaction').value;
-    const reflection = document.getElementById('weeklyReflection').value;
-    
-    const totalScore = parseInt(productivity) + parseInt(health) + parseInt(creativity) + parseInt(social) + parseInt(satisfaction);
-    const percentage = (totalScore / 50) * 100;
-    
-    const review = {
-      date: new Date().toISOString(),
-      week: this.getCurrentWeekNumber(),
-      scores: {
-        productivity: parseInt(productivity),
-        health: parseInt(health),
-        creativity: parseInt(creativity),
-        social: parseInt(social),
-        satisfaction: parseInt(satisfaction)
-      },
-      totalScore,
-      percentage,
-      reflection
-    };
-    
-    this.data.weeklyReviews.push(review);
-    this.addXP(5, 'Bilan Hebdomadaire');
-    this.showNotification('✨ Bilan hebdomadaire terminé ! +5 XP', 'success');
-    this.renderWeeklyReview();
-  }
-
-  renderWeeklyHistory() {
-    if (this.data.weeklyReviews.length === 0) {
-      return '<p class="no-reviews">Aucun bilan effectué pour le moment</p>';
-    }
-    
-    return this.data.weeklyReviews.slice(-8).reverse().map(review => `
-      <div class="review-card">
-        <div class="review-header">
-          <span class="review-week">Semaine ${review.week}</span>
-          <span class="review-score">${review.totalScore}/50</span>
-        </div>
-        <div class="review-percentage">
-          <div class="percentage-bar">
-            <div class="percentage-fill" style="width: ${review.percentage}%"></div>
-          </div>
-          <span>${Math.round(review.percentage)}%</span>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  getAchievements() {
-    const baseAchievements = [
-      {
-        id: 'first_session',
-        name: 'Premier Pas',
-        description: 'Complétez votre première session de focus',
-        icon: '🎯',
-        xp: 10,
-        unlocked: this.data.focusSessions.length > 0,
-        unlockedAt: this.data.focusSessions[0]?.date
-      },
-      {
-        id: 'daily_quota',
-        name: 'Quota Quotidien',
-        description: 'Atteignez 15 XP en une journée',
-        icon: '⚡',
-        xp: 15,
-        unlocked: this.data.dailyXP >= 15,
-        progress: this.data.dailyXP,
-        target: 15
-      },
-      {
-        id: 'week_streak',
-        name: 'Semaine Parfaite',
-        description: '7 jours consécutifs à 15+ XP',
-        icon: '🔥',
-        xp: 25,
-        unlocked: this.getStreak() >= 7,
-        progress: this.getStreak(),
-        target: 7
-      },
-      {
-        id: 'focus_master',
-        name: 'Maître du Focus',
-        description: '50 sessions de focus terminées',
-        icon: '🧘',
-        xp: 30,
-        unlocked: this.data.focusSessions.length >= 50,
-        progress: this.data.focusSessions.length,
-        target: 50
-      },
-      {
-        id: 'rank_expert',
-        name: 'Expert Confirmé',
-        description: 'Atteignez le rang Expert (A)',
-        icon: '💎',
-        xp: 50,
-        unlocked: this.data.totalXP >= 1000,
-        progress: this.data.totalXP,
-        target: 1000
-      }
-    ];
-    
-    return baseAchievements;
-  }
-
-  getProgressionStats() {
-    const totalFocusMinutes = this.data.focusSessions.reduce((sum, session) => sum + session.duration, 0);
-    
-    return {
-      totalFocusTime: Math.round(totalFocusMinutes / 60),
-      currentStreak: this.getStreak(),
-      intensityRate: this.calculateIntensityRate(),
-      averageSessionLength: this.data.focusSessions.length > 0 ? Math.round(totalFocusMinutes / this.data.focusSessions.length) : 0
-    };
-  }
-
-  getStreak() {
-    // Simple streak calculation - can be improved
-    return this.data.currentStreak || 0;
-  }
-
-  calculateIntensityRate() {
-    if (this.data.weeklyReviews.length === 0) return 0;
-    const recent = this.data.weeklyReviews.slice(-4);
-    const average = recent.reduce((sum, review) => sum + review.percentage, 0) / recent.length;
-    return Math.round(average);
-  }
-
-  renderXPChart() {
-    const last7Days = this.getLast7DaysXP();
-    const maxXP = Math.max(...last7Days.map(d => d.xp), 15);
-    
-    return `
-      <div class="chart-bars">
-        ${last7Days.map(day => `
-          <div class="chart-bar">
-            <div class="bar-fill" style="height: ${(day.xp / maxXP) * 100}%"></div>
-            <div class="bar-label">${day.day}</div>
-            <div class="bar-value">${day.xp}</div>
-          </div>
-        `).join('')}
+    // Placeholder pour les paramètres
+    document.getElementById('settingsContent').innerHTML = `
+      <div class="settings-placeholder">
+        <h3>⚙️ Paramètres</h3>
+        <p>Les paramètres seront bientôt disponibles !</p>
       </div>
     `;
   }
 
-  renderFocusChart() {
-    const last7Days = this.getLast7DaysFocus();
-    const maxSessions = Math.max(...last7Days.map(d => d.sessions), 3);
-    
-    return `
-      <div class="chart-bars">
-        ${last7Days.map(day => `
-          <div class="chart-bar">
-            <div class="bar-fill focus" style="height: ${(day.sessions / maxSessions) * 100}%"></div>
-            <div class="bar-label">${day.day}</div>
-            <div class="bar-value">${day.sessions}</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  }
-
-  getLast7DaysXP() {
-    const days = [];
-    const today = new Date();
-    
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dayName = date.toLocaleDateString('fr-FR', { weekday: 'short' });
-      
-      // Calculate XP for this day (simplified)
-      const dayXP = i === 0 ? this.data.dailyXP : Math.floor(Math.random() * 20);
-      
-      days.push({
-        day: dayName,
-        xp: dayXP
-      });
-    }
-    
-    return days;
-  }
-
-  getLast7DaysFocus() {
-    const days = [];
-    const today = new Date();
-    
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dayName = date.toLocaleDateString('fr-FR', { weekday: 'short' });
-      
-      // Calculate sessions for this day
-      const todaySessions = this.data.focusSessions.filter(session => {
-        const sessionDate = new Date(session.date);
-        return sessionDate.toDateString() === date.toDateString();
-      }).length;
-      
-      days.push({
-        day: dayName,
-        sessions: i === 0 ? todaySessions : Math.floor(Math.random() * 4)
-      });
-    }
-    
-    return days;
-  }
-
-  renderRanksProgression() {
-    const ranks = [
-      { name: 'Paumé', xp: 0, badge: 'E', avatar: '😵' },
-      { name: 'Apprenti', xp: 100, badge: 'D', avatar: '🎯' },
-      { name: 'Disciple', xp: 300, badge: 'C', avatar: '⚡' },
-      { name: 'Adepte', xp: 600, badge: 'B', avatar: '🔥' },
-      { name: 'Expert', xp: 1000, badge: 'A', avatar: '💎' },
-      { name: 'Virtuose', xp: 1500, badge: 'S', avatar: '👑' },
-      { name: 'Légende', xp: 2200, badge: 'SS', avatar: '🌟' },
-      { name: 'Élu du Destin', xp: 3000, badge: 'SSS', avatar: '🌙' }
-    ];
-    
-    return ranks.map(rank => {
-      const isUnlocked = this.data.totalXP >= rank.xp;
-      const isCurrent = this.getCurrentRank().name === rank.name;
-      
-      return `
-        <div class="rank-item ${isUnlocked ? 'unlocked' : 'locked'} ${isCurrent ? 'current' : ''}">
-          <div class="rank-avatar">${rank.avatar}</div>
-          <div class="rank-info">
-            <div class="rank-name">${rank.name}</div>
-            <div class="rank-requirement">${rank.xp} XP</div>
-          </div>
-          <div class="rank-badge">${rank.badge}</div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  renderProjectsStats() {
-    if (this.data.projects.length === 0) {
-      return '<p class="no-projects-stats">Aucun projet créé</p>';
-    }
-    
-    return this.data.projects.slice(0, 5).map(project => `
-      <div class="project-stat-item">
-        <div class="project-name">${project.name}</div>
-        <div class="project-time">${Math.floor(project.totalTime / 60)}h ${project.totalTime % 60}min</div>
-      </div>
-    `).join('');
-  }
-
-  getCurrentRank() {
-    const ranks = [
-      { name: 'Paumé', xp: 0, badge: 'E', avatar: '😵' },
-      { name: 'Apprenti', xp: 100, badge: 'D', avatar: '🎯' },
-      { name: 'Disciple', xp: 300, badge: 'C', avatar: '⚡' },
-      { name: 'Adepte', xp: 600, badge: 'B', avatar: '🔥' },
-      { name: 'Expert', xp: 1000, badge: 'A', avatar: '💎' },
-      { name: 'Virtuose', xp: 1500, badge: 'S', avatar: '👑' },
-      { name: 'Légende', xp: 2200, badge: 'SS', avatar: '🌟' },
-      { name: 'Élu du Destin', xp: 3000, badge: 'SSS', avatar: '🌙' }
-    ];
-    
-    let currentRank = ranks[0];
-    for (let i = ranks.length - 1; i >= 0; i--) {
-      if (this.data.totalXP >= ranks[i].xp) {
-        currentRank = ranks[i];
-        break;
-      }
-    }
-    
-    return currentRank;
-  }
-
-  setupSettingsListeners() {
-    // Theme selection
-    const themeOptions = document.querySelectorAll('.theme-option');
-    themeOptions.forEach(option => {
-      option.addEventListener('click', () => {
-        // Remove active class from all options
-        themeOptions.forEach(opt => opt.classList.remove('active'));
-        // Add active class to clicked option
-        option.classList.add('active');
-        // Change theme
-        this.changeTheme(option.dataset.theme);
-      });
-    });
-    
-    // Set current theme as active
-    const currentTheme = this.data.settings?.theme || 'default';
-    const currentThemeOption = document.querySelector(`[data-theme="${currentTheme}"]`);
-    if (currentThemeOption) {
-      currentThemeOption.classList.add('active');
-    }
-    
-    // Other settings listeners can be added here
-  }
-
-  changeTheme(theme) {
-    document.body.className = `theme-${theme}`;
-    this.data.settings = this.data.settings || {};
-    this.data.settings.theme = theme;
-    this.showNotification('Thème changé avec succès !', 'success');
-  }
-
-  exportData() {
-    const dataStr = JSON.stringify(this.data, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `myRPGLife-backup-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    
-    this.showNotification('Données exportées avec succès !', 'success');
-  }
-
-  importData() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const importedData = JSON.parse(e.target.result);
-            this.data = { ...this.data, ...importedData };
-            this.updateUI();
-            this.showNotification('Données importées avec succès !', 'success');
-          } catch (error) {
-            this.showNotification('Erreur lors de l\'importation', 'error');
-          }
-        };
-        reader.readAsText(file);
-      }
-    };
-    
-    input.click();
-  }
-
-  resetAllData() {
-    if (confirm('Êtes-vous sûr de vouloir réinitialiser toutes vos données ? Cette action est irréversible.')) {
-      localStorage.removeItem('myRPGLifeData');
-      location.reload();
-    }
-  }
-
-  // UI Updates
   updateUI() {
-    this.updateDashboard();
-    this.updateTimerDisplay();
-  }
-
-  updateDashboard() {
-    // Update XP display
-    const currentXPEl = document.getElementById('currentXP');
-    const dailyXPEl = document.getElementById('dailyXP');
+    // Mettre à jour l'XP et le rang
+    document.getElementById('currentXP').textContent = this.data.xp;
+    document.getElementById('dailyXP').textContent = this.data.dailyXP;
     
-    if (currentXPEl) currentXPEl.textContent = this.data.totalXP;
-    if (dailyXPEl) dailyXPEl.textContent = this.data.dailyXP;
-    
-    // Update challenge progress
-    const challengeFill = document.getElementById('challengeFill');
-    const challengeStatus = document.getElementById('challengeStatus');
-    
-    if (challengeFill && challengeStatus) {
-      const progress = Math.min(100, (this.data.dailyXP / 15) * 100);
-      challengeFill.style.width = `${progress}%`;
-      challengeStatus.textContent = `${this.data.dailyXP}/15 XP`;
-    }
-    
-    // Update rank info
-    this.updateRankDisplay();
-  }
-
-  updateRankDisplay() {
+    // Mettre à jour le rang
     const ranks = [
-      { name: 'Paumé', xp: 0, badge: 'E', avatar: '😵' },
-      { name: 'Apprenti', xp: 100, badge: 'D', avatar: '🎯' },
-      { name: 'Disciple', xp: 300, badge: 'C', avatar: '⚡' },
-      { name: 'Adepte', xp: 600, badge: 'B', avatar: '🔥' },
-      { name: 'Expert', xp: 1000, badge: 'A', avatar: '💎' },
-      { name: 'Virtuose', xp: 1500, badge: 'S', avatar: '👑' },
-      { name: 'Légende', xp: 2200, badge: 'SS', avatar: '🌟' },
-      { name: 'Élu du Destin', xp: 3000, badge: 'SSS', avatar: '🌙' }
+      { name: 'E', title: 'Paumé hésitant', nextXP: 200 },
+      { name: 'D', title: 'Le Spectateur de Sa Vie', nextXP: 300 },
+      { name: 'C', title: 'Apprenti Motivé', nextXP: 400 },
+      { name: 'B', title: 'Aventurier Régulier', nextXP: 500 },
+      { name: 'A', title: 'Le Vétéran', nextXP: 600 },
+      { name: 'S', title: 'Sentinelle de l\'Ascension', nextXP: 700 },
+      { name: 'SS', title: 'Maître du Flow', nextXP: 750 },
+      { name: 'SSS', title: 'Élu du Destin', nextXP: Infinity }
     ];
-    
-    let currentRank = ranks[0];
-    for (let i = ranks.length - 1; i >= 0; i--) {
-      if (this.data.totalXP >= ranks[i].xp) {
-        currentRank = ranks[i];
-        break;
-      }
+
+    const currentRankData = ranks.find(r => r.name === this.data.rank);
+    if (currentRankData) {
+      document.getElementById('rankName').textContent = currentRankData.title;
+      document.getElementById('rankBadge').textContent = this.data.rank;
+      document.getElementById('nextRankXP').textContent = currentRankData.nextXP === Infinity ? '∞' : currentRankData.nextXP;
     }
+
+    // Mettre à jour la barre d'XP
+    const currentRankIndex = ranks.findIndex(r => r.name === this.data.rank);
+    const currentRankMin = currentRankIndex > 0 ? ranks[currentRankIndex - 1].nextXP : 0;
+    const nextRankXP = currentRankData.nextXP;
     
-    const rankName = document.getElementById('rankName');
-    const rankBadge = document.getElementById('rankBadge');
-    const userAvatar = document.getElementById('userAvatar');
+    if (nextRankXP !== Infinity) {
+      const progress = ((this.data.xp - currentRankMin) / (nextRankXP - currentRankMin)) * 100;
+      document.getElementById('xpFill').style.width = `${Math.min(100, progress)}%`;
+    } else {
+      document.getElementById('xpFill').style.width = '100%';
+    }
+
+    // Mettre à jour le défi journalier
+    const challengeProgress = Math.min(100, (this.data.dailyXP / 15) * 100);
+    document.getElementById('challengeFill').style.width = `${challengeProgress}%`;
+    document.getElementById('challengeStatus').textContent = `${this.data.dailyXP}/15 XP`;
+
+    // Mettre à jour le taux d'intensité
+    this.updateIntensityRate();
+  }
+
+  showModal(content) {
+    document.getElementById('modal').innerHTML = content;
+    document.getElementById('modalOverlay').style.display = 'flex';
+  }
+
+  closeModal() {
+    document.getElementById('modalOverlay').style.display = 'none';
+  }
+
+  showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
     
-    if (rankName) rankName.textContent = currentRank.name;
-    if (rankBadge) rankBadge.textContent = currentRank.badge;
-    if (userAvatar) userAvatar.textContent = currentRank.avatar;
-  }
-
-  // Data management
-  loadData() {
-    const defaultData = {
-      totalXP: 0,
-      dailyXP: 0,
-      projects: [],
-      focusSessions: [],
-      dailyActions: {},
-      xpHistory: [],
-      achievements: [],
-      weeklyReviews: []
-    };
+    document.getElementById('notifications').appendChild(notification);
     
-    try {
-      const saved = localStorage.getItem('myRPGLifeData');
-      return saved ? { ...defaultData, ...JSON.parse(saved) } : defaultData;
-    } catch (error) {
-      console.error('Error loading data:', error);
-      return defaultData;
-    }
+    setTimeout(() => {
+      notification.remove();
+    }, 3000);
   }
 
-  saveData() {
-    try {
-      localStorage.setItem('myRPGLifeData', JSON.stringify(this.data));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
+  // Méthodes pour les actions quotidiennes
+  logSport() {
+    this.addXP(3);
+    this.showNotification('Sport enregistré ! +3 XP', 'success');
   }
 
-  startAutoSave() {
-    setInterval(() => {
-      this.saveData();
-    }, 30000); // Save every 30 seconds
+  showSleepModal() {
+    this.showModal(`
+      <div class="sleep-modal">
+        <h3>😴 Enregistrer le Sommeil</h3>
+        <div class="sleep-options">
+          <button class="sleep-btn" onclick="app.logSleep(2)">
+            Couché avant 22h (>7h de sommeil)<br>
+            <span class="xp-reward">+2 XP</span>
+          </button>
+          <button class="sleep-btn" onclick="app.logSleep(1)">
+            Couché avant minuit (>7h de sommeil)<br>
+            <span class="xp-reward">+1 XP</span>
+          </button>
+        </div>
+      </div>
+    `);
   }
 
-  // Double or Nothing functions
-  chooseSafeReward() {
-    this.addXP(5, 'Coffre Mystique - Récompense Sûre');
-    this.showNotification('✨ +5 XP de récompense sûre !', 'success');
-    this.hideDoubleOrNothingChest();
+  logSleep(xp) {
+    this.addXP(xp);
+    this.closeModal();
+    this.showNotification(`Sommeil enregistré ! +${xp} XP`, 'success');
   }
 
-  chooseDoubleOrNothing() {
-    // Show challenge details
-    const challengeDetails = document.getElementById('challengeDetails');
-    if (challengeDetails) {
-      challengeDetails.style.display = 'block';
-    }
-    
-    // Set up tomorrow's challenge
-    this.data.doubleOrNothingActive = true;
-    this.showNotification('🔥 Défi accepté ! Bonne chance demain !', 'warning');
+  showDistractionModal() {
+    this.showModal(`
+      <div class="distraction-modal">
+        <h3>📱 Déclarer les Distractions</h3>
+        <div class="distraction-options">
+          <button class="distraction-btn" onclick="app.logDistraction(3)">
+            Instagram +1h<br>
+            <span class="xp-penalty">-3 XP</span>
+          </button>
+          <button class="distraction-btn" onclick="app.logDistraction(5)">
+            Musique +1h30<br>
+            <span class="xp-penalty">-5 XP</span>
+          </button>
+        </div>
+      </div>
+    `);
   }
 
-  hideDoubleOrNothingChest() {
-    const chest = document.getElementById('doubleOrNothingChest');
-    if (chest) {
-      chest.style.display = 'none';
-    }
+  logDistraction(xp) {
+    this.data.xp = Math.max(0, this.data.xp - xp);
+    this.data.dailyXP = Math.max(0, this.data.dailyXP - xp);
+    this.updateUI();
+    this.saveData();
+    this.closeModal();
+    this.showNotification(`Distraction enregistrée ! -${xp} XP`, 'warning');
+  }
+
+  goToWeeklyReview() {
+    this.showSection('weekly');
   }
 }
 
-// Initialize the app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-  window.app = new MyRPGLifeApp();
-});
+// Initialiser l'application
+const app = new MyRPGLifeApp();
