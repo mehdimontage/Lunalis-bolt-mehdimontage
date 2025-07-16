@@ -337,10 +337,10 @@
 
                 <!-- Contrôles du timer -->
                 <div class="timer-controls">
-                  <button class="timer-btn primary" id="startPauseBtn">
+                  <button class="timer-btn primary" id="startPauseBtn" onclick="app.toggleTimer()">
                     <span id="startPauseText">Commencer Focus</span>
                   </button>
-                  <button class="timer-btn secondary" id="resetBtn">
+                  <button class="timer-btn secondary" id="resetBtn" onclick="app.resetTimer()">
                     Annuler
                   </button>
                 </div>
@@ -349,7 +349,7 @@
                 <div class="timer-options">
                   <div class="option-item">
                     <label class="futuristic-toggle">
-                      <input type="checkbox" id="autoBreaks" checked />
+                      <input type="checkbox" id="autoBreaks" checked disabled />
                       <span class="toggle-slider"></span>
                       <span class="toggle-label"
                         >Pauses automatiques (5min/25min)</span
@@ -358,7 +358,7 @@
                   </div>
                   <div class="option-item">
                     <label class="futuristic-toggle">
-                      <input type="checkbox" id="spotifyMode" />
+                      <input type="checkbox" id="spotifyMode" disabled />
                       <span class="toggle-slider"></span>
                       <span class="toggle-label"
                         >Mode Spotify (simulation)</span
@@ -535,6 +535,11 @@
         <section id="progression" class="content-section">
           <div class="progression-container">
             <h2>Progression & Statistiques</h2>
+            <div class="progression-header">
+              <button class="btn-ranks" onclick="app.showRanksModal()">
+                🏆 Les Rangs
+              </button>
+            </div>
             <div class="progression-content" id="progressionContent">
               <!-- Contenu généré dynamiquement -->
             </div>
@@ -547,7 +552,7 @@
             <h2>📊 Bilan Hebdomadaire</h2>
 
             <div class="weekly-countdown-compact">
-              <div class="countdown-timer-small" id="weeklyCountdown">
+              <div class="countdown-timer-large" id="weeklyCountdown">
                 6j 23h 45m
               </div>
             </div>
