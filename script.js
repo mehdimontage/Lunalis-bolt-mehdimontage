@@ -65,6 +65,16 @@ class MyRPGLifeApp {
         data.stats.mandatoryBlocks = 0;
         data.stats.dailyFocusXP = 0;
       }
+      
+      // Vérifier si nextWeeklyReview est valide
+      if (data.nextWeeklyReview) {
+        const nextReview = new Date(data.nextWeeklyReview);
+        if (isNaN(nextReview.getTime())) {
+          // Si la date est invalide, la réinitialiser
+          data.nextWeeklyReview = null;
+        }
+      }
+      
       return data;
     }
     return defaultData;
@@ -569,7 +579,7 @@ class MyRPGLifeApp {
     this.showNotification('Bilan hebdomadaire enregistré ! +5 XP', 'success');
     
     // Animation de succès
-    this.playReviewAnimation(percentage);
+    this.playReviewAnimation();
     
     // Recharger la vue
     this.renderWeeklyReview();
@@ -607,33 +617,16 @@ class MyRPGLifeApp {
     intensityFill.style.width = `${intensityRate}%`;
   }
 
-  playReviewAnimation(percentage) {
+  playReviewAnimation() {
     // Animation simple pour le moment
     const notification = document.createElement('div');
-    notification.className = 'review-animation-popup';
-    notification.innerHTML = `
-      <div class="review-success">
-        <div class="success-icon">🎉</div>
-        <div class="success-title">Bilan Hebdomadaire Complété !</div>
-        <div class="success-score">Score: ${percentage}%</div>
-        <div class="success-xp">+5 XP</div>
-        <div class="success-sparkles">✨ ✨ ✨</div>
-      </div>
-    `;
+    notification.className = 'review-animation';
+    notification.innerHTML = '✨ Bilan complété ! +5 XP ✨';
     document.body.appendChild(notification);
     
-    // Animation d'apparition
     setTimeout(() => {
-      notification.classList.add('show');
-    }, 100);
-    
-    // Suppression après 4 secondes
-    setTimeout(() => {
-      notification.classList.add('fade-out');
-      setTimeout(() => {
-        notification.remove();
-      }, 500);
-    }, 4000);
+      notification.remove();
+    }, 3000);
   }
 
   showRanksModal() {
