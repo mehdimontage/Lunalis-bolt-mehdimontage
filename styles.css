@@ -943,25 +943,25 @@ body {
 
 .stats-horizontal {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
   margin-bottom: 2rem;
 }
 
 .stat-card {
-  background: rgba(102, 126, 234, 0.1);
-  border: 1px solid rgba(102, 126, 234, 0.3);
+  background: var(--accent-bg);
   border-radius: 12px;
-  padding: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   transition: all 0.3s ease;
 }
 
 .stat-card:hover {
-  background: rgba(102, 126, 234, 0.2);
   transform: translateY(-2px);
+  border-color: var(--primary-color);
 }
 
 .stat-card.purple {
@@ -972,12 +972,7 @@ body {
 .stat-icon {
   font-size: 1.5rem;
   width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(102, 126, 234, 0.2);
-  border-radius: 8px;
+  text-align: center;
 }
 
 .stat-content {
@@ -985,16 +980,16 @@ body {
 }
 
 .stat-value {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: bold;
-  color: #667eea;
-  display: block;
+  color: var(--text-primary);
+  line-height: 1;
 }
 
 .stat-label {
-  font-size: 0.875rem;
-  color: #8892b0;
-  display: block;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
 }
 
 /* Blocks Status Modern */
@@ -1675,19 +1670,6 @@ body {
   display: inline-block;
 }
 
-/* Timer hebdomadaire plus grand */
-.weekly-countdown-compact .countdown-timer-large {
-  font-size: 4rem;
-  padding: 4rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 20px;
-  color: white;
-  font-weight: 900;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  display: inline-block;
-  margin-bottom: 2rem;
-}
-
 .weekly-status {
   background: var(--card-bg);
   border-radius: 16px;
@@ -1888,250 +1870,6 @@ body {
   background: var(--gradient-primary);
   border-radius: 4px;
   transition: width 0.5s ease;
-}
-
-/* Mode focus - désactivation visuelle */
-body.focus-mode .nav-btn:disabled {
-  opacity: 0.3;
-  pointer-events: none;
-}
-
-body.focus-mode #createProjectBtn:disabled,
-body.focus-mode #autoBreaks:disabled,
-body.focus-mode #spotifyMode:disabled {
-  opacity: 0.3;
-  pointer-events: none;
-}
-
-/* Système de rangs premium */
-.ranks-modal {
-  max-width: 800px;
-  width: 100%;
-}
-
-.ranks-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
-.rank-item {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 2px solid #333;
-  border-radius: 15px;
-  padding: 1.5rem;
-  text-align: center;
-  position: relative;
-  transition: all 0.3s ease;
-}
-
-.rank-item:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-.rank-item.current {
-  border-color: #667eea;
-  box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
-}
-
-.rank-badge {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-}
-
-.rank-title {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #fff;
-  margin-bottom: 0.25rem;
-}
-
-.rank-subtitle {
-  color: #8892b0;
-  margin-bottom: 0.5rem;
-}
-
-.rank-xp {
-  font-size: 0.875rem;
-  color: #667eea;
-}
-
-.current-indicator {
-  position: absolute;
-  top: -10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #667eea;
-  color: white;
-  padding: 0.25rem 0.75rem;
-  border-radius: 15px;
-  font-size: 0.75rem;
-  font-weight: bold;
-}
-
-/* Rangs premium avec animations */
-.rank-sss {
-  background: linear-gradient(135deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
-  background-size: 400% 400%;
-  animation: gradientShift 3s ease infinite;
-  border: 3px solid transparent;
-  background-clip: padding-box;
-}
-
-.rank-ss {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-color: #667eea;
-  box-shadow: 0 0 30px rgba(102, 126, 234, 0.6);
-}
-
-.rank-s {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-  border-color: #f093fb;
-}
-
-.rank-a {
-  background: linear-gradient(135deg, #4facfe, #00f2fe);
-  border-color: #4facfe;
-}
-
-.rank-b {
-  background: linear-gradient(135deg, #43e97b, #38f9d7);
-  border-color: #43e97b;
-}
-
-.rank-c {
-  background: linear-gradient(135deg, #fa709a, #fee140);
-  border-color: #fa709a;
-}
-
-.rank-d {
-  background: linear-gradient(135deg, #a8edea, #fed6e3);
-  border-color: #a8edea;
-}
-
-.rank-e {
-  background: linear-gradient(135deg, #d299c2, #fef9d7);
-  border-color: #d299c2;
-}
-
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-/* Bouton Les Rangs */
-.btn-ranks {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 12px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-bottom: 2rem;
-}
-
-.btn-ranks:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-}
-
-/* Formulaire de bilan hebdomadaire */
-.weekly-form {
-  background: rgba(26, 26, 46, 0.8);
-  border-radius: 20px;
-  padding: 2rem;
-  margin-top: 2rem;
-}
-
-.weekly-intro {
-  color: #8892b0;
-  margin-bottom: 2rem;
-  text-align: center;
-}
-
-.questions-container {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  margin-bottom: 2rem;
-}
-
-.question-item {
-  background: rgba(102, 126, 234, 0.1);
-  border-radius: 15px;
-  padding: 1.5rem;
-}
-
-.question-item label {
-  display: block;
-  color: #ccd6f6;
-  font-weight: 500;
-  margin-bottom: 1rem;
-}
-
-.rating-scale {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.rating-option {
-  cursor: pointer;
-}
-
-.rating-option input {
-  display: none;
-}
-
-.rating-number {
-  display: inline-block;
-  width: 40px;
-  height: 40px;
-  line-height: 40px;
-  text-align: center;
-  background: rgba(102, 126, 234, 0.2);
-  border: 2px solid rgba(102, 126, 234, 0.3);
-  border-radius: 50%;
-  color: #8892b0;
-  transition: all 0.3s ease;
-  font-weight: bold;
-}
-
-.rating-option:hover .rating-number {
-  background: rgba(102, 126, 234, 0.4);
-  color: #ccd6f6;
-}
-
-.rating-option input:checked + .rating-number {
-  background: #667eea;
-  border-color: #667eea;
-  color: white;
-  transform: scale(1.1);
-}
-
-.submit-review-btn {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  border: none;
-  padding: 1rem 2rem;
-  border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: block;
-  margin: 0 auto;
-}
-
-.submit-review-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
 }
 
 /* Achievements Styles */

@@ -23,8 +23,6 @@ class MyRPGLifeApp {
     this.updateUI();
     this.startWeeklyCountdown();
     this.updateFocusStats();
-    this.updateDurationDisplay();
-    this.updateTimerDisplay();
   }
 
   loadData() {
@@ -181,7 +179,6 @@ class MyRPGLifeApp {
     this.timer.interval = setInterval(() => {
       this.timer.remaining--;
       this.updateTimerDisplay();
-      this.updateFocusStatsRealTime();
 
       if (this.timer.remaining <= 0) {
         this.completeTimer();
@@ -206,7 +203,6 @@ class MyRPGLifeApp {
     this.timer.interval = setInterval(() => {
       this.timer.remaining--;
       this.updateTimerDisplay();
-      this.updateFocusStatsRealTime();
 
       if (this.timer.remaining <= 0) {
         this.completeTimer();
@@ -281,20 +277,6 @@ class MyRPGLifeApp {
     this.saveData();
   }
 
-  updateFocusStatsRealTime() {
-    if (this.timer.isRunning) {
-      const currentMinutes = Math.round((this.timer.duration - this.timer.remaining) / 60);
-      if (currentMinutes > 0) {
-        // Mettre à jour les stats en temps réel sans sauvegarder
-        document.getElementById('dailySessions').textContent = this.data.stats.dailySessions + (currentMinutes >= 1 ? 1 : 0);
-        document.getElementById('dailyFocusTime').textContent = `${this.data.stats.dailyFocusTime + currentMinutes}min`;
-        
-        const currentXP = this.calculateFocusXP(currentMinutes);
-        document.getElementById('dailyFocusXP').textContent = this.data.stats.dailyFocusXP + currentXP;
-      }
-    }
-  }
-
   updateFocusStats() {
     document.getElementById('dailySessions').textContent = this.data.stats.dailySessions;
     document.getElementById('dailyFocusTime').textContent = `${this.data.stats.dailyFocusTime}min`;
@@ -330,23 +312,21 @@ class MyRPGLifeApp {
   }
 
   setAppDisabled(disabled) {
-    const navBtns = document.querySelectorAll('.nav-btn:not([data-section="focus"])');
+    const appContainer = document.querySelector('.app-container');
     const autoBreaks = document.getElementById('autoBreaks');
     const spotifyMode = document.getElementById('spotifyMode');
     const createProjectBtn = document.getElementById('createProjectBtn');
 
     if (disabled) {
-      navBtns.forEach(btn => btn.disabled = true);
+      appContainer.classList.add('app-disabled');
       autoBreaks.disabled = true;
       spotifyMode.disabled = true;
       createProjectBtn.disabled = true;
-      document.body.classList.add('focus-mode');
     } else {
-      navBtns.forEach(btn => btn.disabled = false);
+      appContainer.classList.remove('app-disabled');
       autoBreaks.disabled = false;
       spotifyMode.disabled = false;
       createProjectBtn.disabled = false;
-      document.body.classList.remove('focus-mode');
     }
   }
 
@@ -632,35 +612,10 @@ class MyRPGLifeApp {
     const notification = document.createElement('div');
     notification.className = 'review-animation';
     notification.innerHTML = '✨ Bilan complété ! +5 XP ✨';
-    notification.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: linear-gradient(45deg, #667eea, #764ba2);
-      color: white;
-      padding: 2rem;
-      border-radius: 15px;
-      font-size: 1.5rem;
-      font-weight: bold;
-      z-index: 10000;
-      animation: reviewPulse 3s ease-in-out;
-    `;
-    
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes reviewPulse {
-        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-        50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
-      }
-    `;
-    document.head.appendChild(style);
     document.body.appendChild(notification);
     
     setTimeout(() => {
       notification.remove();
-      style.remove();
     }, 3000);
   }
 
@@ -791,6 +746,7 @@ class MyRPGLifeApp {
   }
 
   renderAchievements() {
+    // Placeholder pour les achievements
     document.getElementById('achievementsContent').innerHTML = `
       <div class="achievements-placeholder">
         <h3>🏆 Système d'Achievements</h3>
@@ -800,22 +756,17 @@ class MyRPGLifeApp {
   }
 
   renderProgression() {
+    // Placeholder pour la progression
     document.getElementById('progressionContent').innerHTML = `
-      <div class="progression-content">
-        <div class="progression-header">
-          <button class="btn-ranks" onclick="app.showRanksModal()">
-            🏆 Les Rangs
-          </button>
-        </div>
-        <div class="progression-placeholder">
-          <h3>📈 Statistiques Détaillées</h3>
-          <p>Les statistiques détaillées seront bientôt disponibles !</p>
-        </div>
+      <div class="progression-placeholder">
+        <h3>📈 Statistiques Détaillées</h3>
+        <p>Les statistiques détaillées seront bientôt disponibles !</p>
       </div>
     `;
   }
 
   renderSettings() {
+    // Placeholder pour les paramètres
     document.getElementById('settingsContent').innerHTML = `
       <div class="settings-placeholder">
         <h3>⚙️ Paramètres</h3>
