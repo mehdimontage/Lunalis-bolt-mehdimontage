@@ -1661,6 +1661,19 @@ body {
   margin-bottom: 2rem;
 }
 
+.countdown-timer-large {
+  font-size: 10rem;
+  font-weight: 900;
+  color: var(--primary-color);
+  text-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+  font-family: 'Orbitron', monospace;
+  margin: 2rem 0;
+  padding: 2rem;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+  border-radius: 20px;
+  border: 2px solid rgba(99, 102, 241, 0.3);
+}
+
 .countdown-timer-small {
   background: var(--gradient-secondary);
   color: white;
